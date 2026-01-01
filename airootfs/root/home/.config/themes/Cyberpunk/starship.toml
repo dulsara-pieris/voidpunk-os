@@ -1,0 +1,78 @@
+add_newline = false
+
+format = """
+[╔═╡ ❰](bold cyan)$username$directory$git_branch$git_status$fill$rust$python$golang$nodejs$docker_context$nix_shell$time$cmd_duration
+[╚══╡ ❱❱❱](bold cyan)"""
+
+[fill]
+symbol = "-"
+
+[username]
+show_always = true
+style_user = "bold"
+format = "[ $user  ]($style_user)"
+
+[directory]
+style = "bold cyan"
+format = "[  $path ]($style)"
+truncation_length = 4
+truncation_symbol = "…/"
+truncate_to_repo = true
+read_only = " "
+
+[git_branch]
+symbol = " "
+style = "bold magenta"
+format = "[ $symbol$branch ]($style)"
+
+[git_status]
+format = "[ $all_status$ahead_behind ]($style)"
+style = "bold red"
+conflicted = "="
+ahead = "↑"
+behind = "↓"
+diverged = "⇕"
+stashed = "≡"
+modified = "✚"
+staged = "✓"
+renamed = "»"
+deleted = "✗"
+untracked = "?"
+
+[rust]
+symbol = "  "
+style = "bold red"
+
+[python]
+symbol = " 󰌠 "
+style = "bold yellow"
+
+[golang]
+symbol = "  "
+style = "bold cyan"
+
+[nodejs]
+symbol = " 󰎙 "
+style = "bold green"
+
+[docker_context]
+symbol = " 󰡨 "
+style = "bold blue"
+
+[nix_shell]
+symbol = " 󱄅 "
+style = "bold white"
+
+
+[time]
+disabled = false
+format = "[ 󰥔 $time ](bold purple)"
+time_format = "%H:%M"
+
+[cmd_duration]
+format = "[  $duration ](bold yellow)"
+min_time = 5000
+
+[character]
+success_symbol = "[❱❱❱](bold cyan)"
+error_symbol = "[✗✗✗](bold red)"

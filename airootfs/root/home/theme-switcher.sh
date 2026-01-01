@@ -1,33 +1,40 @@
 #!/bin/env zsh
 
-# Directory where themes are stored
-THEME_DIR="$HOME/.config/themes"
+# -------------------------------
+# Full Modular Theme Switcher
+# -------------------------------
 
-# Get a list of available themes
+THEME_DIR="$HOME/.config/hypr/themes"
+
+# Get a list of themes
 themes=($(ls "$THEME_DIR"))
 
-# Show Wofi menu to select theme
+# Show Wofi menu
 selected=$(printf "%s\n" "${themes[@]}" | wofi --dmenu --prompt "Select Theme")
-
-# Exit if no selection
 [ -z "$selected" ] && exit
 
-# Paths
-HYPR_CONFIG="$HOME/.config/hypr/modules/styling.conf"
-WAYBAR_CONFIG="$HOME/.config/waybar/config"
-WOFI_CONFIG="$HOME/.config/wofi/style.rasi"
+# Map theme files to config locations
+declare -A modules
+modules=(
+  ["styling.conf"]="$HOME/.config/hypr/modules/styling.conf"
+  ["waybar.conf"]="$HOME/.config/waybar/config"
+  ["waybar.css"]="$HOME/.config/waybar/style.css"
+  ["wofi.rasi"]="$HOME/.config/wofi/style.rasi"
+  ["kitty.conf"]="$HOME/.config/kitty/kitty.conf"
+  ["starship.toml"]="$HOME/.config/starship.toml"
+  ["swaylock.rasi"]="$HOME/.config/swaylock/style.rasi"
+)
 
-# Copy theme files
-if [[ -f "$THEME_DIR/$selected/styling.conf" ]]; then
-    cp "$THEME_DIR/$selected/styling.conf" "$HYPR_CONFIG"
-fi
+# Copy theme files if they exist
+for file in "${(@k)modules}"; do
+  if [[ -f "$THEME_DIR/$selected/$file" ]]; then
+    cp "$THEME_DIR/$selected/$file" "${modules[$file]}"
+  fi
+done
 
-if [[ -f "$THEME_DIR/$selected/waybar.conf" ]]; then
-    cp "$THEME_DIR/$selected/waybar.conf" "$WAYBAR_CONFIG"
-fi
-
-if [[ -f "$THEME_DIR/$selected/wofi.rasi" ]]; then
-    cp "$THEME_DIR/$selected/wofi.rasi" "$WOFI_CONFIG"
+# Set wallpaper if exists
+if [[ -f "$THEME_DIR/$selected/wallpaper.jpg" ]]; then
+    feh --bg-scale "$THEME_DIR/$selected/wallpaper.jpg"
 fi
 
 # Reload Hyprland and Waybar
@@ -35,5 +42,10 @@ hyprctl reload
 killall waybar &>/dev/null
 waybar &
 
-# Optional: notify theme change
+# Reload Kitty colors dynamically
+if command -v kitty >/dev/null && [[ -f "$THEME_DIR/$selected/kitty.conf" ]]; then
+    kitty @ set-colors --all --config "$THEME_DIR/$selected/kitty.conf" 2>/dev/null
+fi
+
+# Notify theme change
 notify-send "Theme switched" "$selected theme applied!"

@@ -1,0 +1,128 @@
+@define-color c-pink    #FF007F;
+@define-color c-magenta #FF00E5;
+@define-color c-purple  #B400FF;
+@define-color c-blue    #006CFF;
+@define-color c-cyan    #00E9FF;
+@define-color c-teal    #00FFC8;
+@define-color c-green   #00FF66;
+@define-color c-lime    #A6FF00;
+@define-color c-yellow  #FFE600;
+@define-color c-orange  #FF9A00;
+@define-color c-red     #FF1A75;
+@define-color c-white   #EAFDFF;
+
+/* Ultra-transparent backgrounds */
+@define-color bg-alpha rgba(8, 2, 15, 0.40);
+@define-color module-alpha rgba(20, 8, 35, 0.50);
+
+/* GLOBAL */
+* {
+  font-family: "JetBrainsMono Nerd Font", sans-serif;
+  font-size: 16px;
+  color: #f000f0;
+}
+
+/* MAIN BAR */
+window#waybar {
+  background-color: @bg-alpha;
+  border-radius: 16px;
+  padding: 6px;
+  border: 1px solid rgba(255, 0, 229, 0.25);
+  box-shadow: 0 0 12px rgba(255, 0, 229, 0.25),
+              0 0 18px rgba(0, 240, 255, 0.20);
+}
+
+/* MODULE WRAPPERS */
+.modules-left,
+.modules-center,
+.modules-right {
+  background-color: @module-alpha;
+  padding: 6px 12px;
+  margin: 0 6px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 0 12px rgba(255, 255, 255, 0.15);
+}
+
+/* ITEMS — Cycling Colors */
+#clock { color: @c-magenta; }
+#network { color: @c-green; }
+#battery { color: @c-yellow; }
+#temperature { color: @c-orange; }
+#backlight { color: @c-lime; }
+#pulseaudio { color: @c-pink; }
+#language { color: @c-purple; }
+#window { color: @c-cyan; }
+#custom-notification { color: @c-red; }
+
+/* CLOCK — neon magenta */
+#clock {
+  background-color: rgba(255, 0, 229, 0.10);
+  border: 1px solid rgba(255, 0, 229, 0.25);
+  border-radius: 10px;
+  padding: 4px 16px;
+}
+
+/* WORKSPACES — rainbow buttons */
+#workspaces button {
+  padding: 4px 10px;
+  margin: 0 4px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  transition: 150ms;
+}
+
+/* Workspace colors */
+#workspaces button:nth-child(1) { color: @c-pink; }
+#workspaces button:nth-child(2) { color: @c-magenta; }
+#workspaces button:nth-child(3) { color: @c-purple; }
+#workspaces button:nth-child(4) { color: @c-blue; }
+#workspaces button:nth-child(5) { color: @c-cyan; }
+#workspaces button:nth-child(6) { color: @c-teal; }
+#workspaces button:nth-child(7) { color: @c-green; }
+#workspaces button:nth-child(8) { color: @c-lime; }
+#workspaces button:nth-child(9) { color: @c-yellow; }
+#workspaces button:nth-child(10){ color: @c-orange; }
+
+#workspaces button.active {
+  background-color: rgba(0, 255, 255, 0.18);
+  border-color: rgba(0, 255, 255, 0.40);
+  box-shadow: 0 0 12px rgba(0, 255, 255, 0.35);
+  color: @c-white;
+}
+
+/* MEDIA MODULE — full rainbow gradient */
+#custom-media {
+  padding: 6px 16px;
+  border-radius: 12px;
+  color: #0A0212;
+  font-weight: 700;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background-image: linear-gradient(
+    13deg,
+    @c-pink,
+    @c-purple,
+    @c-blue,
+    @c-cyan,
+    @c-green,
+    @c-lime,
+    @c-yellow,
+    @c-orange,
+    @c-red
+  );
+}
+
+/* NOTIFICATION */
+#custom-notification {
+  border-radius: 8px;
+  padding: 4px 14px;
+  background-color: rgba(255, 0, 229, 0.08);
+  border: 1px solid rgba(255, 0, 229, 0.20);
+}
+
+/* TOOLTIP */
+tooltip {
+  background-color: rgba(20, 8, 35, 0.25);
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+}
