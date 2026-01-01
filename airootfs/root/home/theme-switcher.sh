@@ -1,45 +1,22 @@
-#!/usr/bin/env zsh
+#!/bin/bash
 
-# -----------------------------
-# Paths
-# -----------------------------
-THEME_DIR="/etc/voidpunk/themes"
-HYPR_THEME="$HOME/.config/hypr/theme.conf"
-WAYBAR_THEME="$HOME/.config/waybar/style.css"
-WOFI_THEME="$HOME/.config/wofi/style.css"
+THEME_DIR="$HOME/.config/themes"
 
-# -----------------------------
-# Pick theme with Wofi
-# -----------------------------
-THEME=($(ls "$THEME_DIR" | wofi --dmenu --prompt "Choose Theme"))
-[[ -z "$THEME" ]] && exit 0
+# Get list of themes
+themes=($(ls "$THEME_DIR"))
 
-# -----------------------------
-# Link configs
-# -----------------------------
-mkdir -p "$HOME/.config/hypr" "$HOME/.config/waybar" "$HOME/.config/wofi"
-ln -sf "$THEME_DIR/$THEME/hypr.conf" "$HYPR_THEME"
-ln -sf "$THEME_DIR/$THEME/waybar.css" "$WAYBAR_THEME"
-ln -sf "$THEME_DIR/$THEME/wofi.css" "$WOFI_THEME"
+# Show menu with Wofi
+selected=$(printf "%s\n" "${themes[@]}" | wofi --dmenu --prompt "Select Theme")
 
-# -----------------------------
-# GTK theme
-# -----------------------------
-GTK_THEME=$(cat "$THEME_DIR/$THEME/gtk.theme")
-gsettings set org.gnome.desktop.interface gtk-theme "$GTK_THEME"
+# Exit if no selection
+[ -z "$selected" ] && exit
 
-# -----------------------------
-# Wallpaper
-# -----------------------------
-swww img "$THEME_DIR/$THEME/wallpaper.jpg" --transition-type grow
+# Copy theme files to main config
+cp "$THEME_DIR/$selected/hyprland.conf" "$HOME/.config/hypr/hyprland.conf"
+cp "$THEME_DIR/$selected/waybar.conf" "$HOME/.config/waybar/config"
+cp "$THEME_DIR/$selected/wofi.rasi" "$HOME/.config/wofi/style.rasi"
 
-# -----------------------------
-# Reload Hyprland + Waybar
-# -----------------------------
+# Reload Hyprland and Waybar
 hyprctl reload
-pkill waybar && waybar &
-
-# -----------------------------
-# Reload pywal colors
-# -----------------------------
-wal -R
+killall waybar &>/dev/null
+waybar &
