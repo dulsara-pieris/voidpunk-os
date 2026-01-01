@@ -155,4 +155,4 @@ echo "${GREEN}✅ Dotfiles copied to $DOTDEST${RESET}"
 
 
 EOF
-echo "${GREEN}🎉 Installation finished! Reboot to enter your VoidPunk Cyberpunk Desktop.${RESET}"
+echo "${GREEN}🎉 Installation finished! Reboot to enter $username's VoidPunk Cyberpunk Desktop.${RESET}"
