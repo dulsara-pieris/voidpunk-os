@@ -145,6 +145,14 @@ passwd "$username"
 sed -i 's/^# %wheel ALL=(ALL) ALL/%wheel ALL=(ALL) ALL/' /etc/sudoers
 systemctl enable NetworkManager
 echo "${GREEN}✅ VoidPunk setup complete! Hyprland is default DE.${RESET}"
-EOF
 
+echo "${GREEN}⚡ Setting up user dotfiles...${RESET}"
+DOTSRC="/home"
+DOTDEST="/home/$username"
+rsync -a "$DOTSRC/" "$DOTDEST/"
+chown -R "$username:$username" "$DOTDEST"
+echo "${GREEN}✅ Dotfiles copied to $DOTDEST${RESET}"
+
+
+EOF
 echo "${GREEN}🎉 Installation finished! Reboot to enter your VoidPunk Cyberpunk Desktop.${RESET}"
