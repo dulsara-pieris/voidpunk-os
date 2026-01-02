@@ -1,16 +1,15 @@
-#!/bin/zsh
+#!/bin/bash
 
 # =============================================
 #        VoidPunk Cyberpunk Installer
 #        Hyprland default DE
 # =============================================
 clear
-autoload -U colors && colors
 
-# --- Neon palette ---
-GREEN=$fg_bold[green]; RED=$fg_bold[red]; YELLOW=$fg_bold[yellow]
-BLUE=$fg_bold[blue]; MAGENTA=$fg_bold[magenta]; CYAN=$fg_bold[cyan]
-NEON=$fg_bold[magenta]; BOLD=$fg_bold[white]; RESET=$reset_color
+# --- Neon palette (ANSI codes for portability) ---
+GREEN='\033[1;32m'; RED='\033[1;31m'; YELLOW='\033[1;33m'
+BLUE='\033[1;34m'; MAGENTA='\033[1;35m'; CYAN='\033[1;36m'
+NEON='\033[1;35m'; BOLD='\033[1;37m'; RESET='\033[0m'
 
 # --- Cyberpunk ASCII banner ---
 banner=(
@@ -23,159 +22,226 @@ banner=(
 "║                        \\/                      \\/     \\/     ║"
 "╚══════════════════════════════════════════════════════════════╝"
 )
-COLORS=($fg_bold[cyan] $fg_bold[magenta] $fg_bold[blue] $fg_bold[yellow] $fg_bold[green] $fg_bold[red])
+COLORS=('\033[1;36m' '\033[1;35m' '\033[1;34m' '\033[1;33m' '\033[1;32m' '\033[1;31m')
 
 # --- Flicker effect ---
 for _ in {1..2}; do
-    for i in $(seq 1 ${#banner[@]}); do
-        idx=$(( RANDOM % ${#COLORS[@]} + 1 ))
+    for i in "${!banner[@]}"; do
+        idx=$((RANDOM % ${#COLORS[@]}))
         color=${COLORS[$idx]}
-        echo "${color}${banner[$i]}${RESET}"
+        echo -e "${color}${banner[$i]}${RESET}"
     done
     sleep 0.8
-    tput cuu $((${#banner[@]}))
+    tput cuu ${#banner[@]}
 done
 
 # --- Final static banner ---
-for i in $(seq 1 ${#banner[@]}); do
-    idx=$(( i % ${#COLORS[@]} + 1 ))
+for i in "${!banner[@]}"; do
+    idx=$((i % ${#COLORS[@]}))
     color=${COLORS[$idx]}
-    echo "${color}${banner[$i]}${RESET}"
+    echo -e "${color}${banner[$i]}${RESET}"
 done
 
 # --- Animated initializing message ---
-msg="${BOLD}⚡ Initializing VoidPunk Cyberpunk Installer... ⚡${RESET}"
+msg="⚡ Initializing VoidPunk Cyberpunk Installer... ⚡"
+echo -ne "${BOLD}"
 for ((i=0; i<${#msg}; i++)); do
     echo -n "${msg:$i:1}"
     sleep 0.03
 done
-echo ""
+echo -e "${RESET}\n"
 
 # --- Ask for username and hostname ---
-echo -n "${NEON}Enter your new username: ${RESET}"
+echo -ne "${NEON}Enter your new username: ${RESET}"
 read username
-echo -n "${NEON}Enter your system hostname: ${RESET}"
+echo -ne "${NEON}Enter your system hostname: ${RESET}"
 read hostname
 
-# Export for chroot usage
-export USERNAME="$username"
-export HOSTNAME="$hostname"
-
 # --- Check network ---
-echo -n "${BLUE}Checking network"
+echo -ne "${BLUE}Checking network"
 for i in {1..3}; do echo -n "."; sleep 0.5; done
 echo ""
-ping -c 1 voidlinux.org &>/dev/null && echo "${GREEN}Network OK!${RESET}" || { echo "${RED}No network!${RESET}"; exit 1; }
+if ping -c 1 voidlinux.org &>/dev/null; then
+    echo -e "${GREEN}Network OK!${RESET}"
+else
+    echo -e "${RED}No network!${RESET}"
+    exit 1
+fi
 
 # --- Select disk safely ---
-echo "${MAGENTA}Available disks:${RESET}"
-lsblk
+echo -e "${MAGENTA}Available disks:${RESET}"
+lsblk -d -o NAME,SIZE,TYPE | grep disk
 while true; do
-    echo -n "${NEON}Enter the disk to install VoidPunk (e.g., /dev/sda): ${RESET}"
+    echo -ne "${NEON}Enter the disk to install VoidPunk (e.g., /dev/sda): ${RESET}"
     read disk
-    [[ -b "$disk" ]] && break || echo "${RED}Invalid disk. Try again.${RESET}"
+    [[ -b "$disk" ]] && break || echo -e "${RED}Invalid disk. Try again.${RESET}"
 done
 
-echo "${RED}⚠️ All data on $disk will be erased! ⚠️${RESET}"
-echo -n "Type ${BOLD}YES${RESET} to continue: "
+echo -e "${RED}⚠️ All data on $disk will be erased! ⚠️${RESET}"
+echo -ne "Type ${BOLD}YES${RESET} to continue: "
 read confirm
-[[ $confirm != YES ]] && { echo "${YELLOW}Canceled.${RESET}"; exit 1; }
+if [[ $confirm != "YES" ]]; then
+    echo -e "${YELLOW}Canceled.${RESET}"
+    exit 1
+fi
 
-# --- Wipe old partition table (important for disks with Manjaro/other OS) ---
-echo "${YELLOW}Wiping old partition table on $disk...${RESET}"
-dd if=/dev/zero of="$disk" bs=1M count=10 status=progress
-partprobe "$disk"
+# --- Wipe old partition table ---
+echo -e "${YELLOW}Wiping old partition table on $disk...${RESET}"
+dd if=/dev/zero of="$disk" bs=1M count=10 status=progress 2>/dev/null
+sync
+partprobe "$disk" 2>/dev/null
+sleep 2
 
 # --- Partitioning ---
-echo "${CYAN}Partitioning $disk...${RESET}"
+echo -e "${CYAN}Partitioning $disk...${RESET}"
 parted --script "$disk" mklabel gpt
 parted --script "$disk" mkpart primary fat32 1MiB 513MiB
 parted --script "$disk" set 1 boot on
 parted --script "$disk" mkpart primary linux-swap 513MiB 2.5GiB
 parted --script "$disk" mkpart primary ext4 2.5GiB 100%
-echo "${GREEN}Partitioning complete!${RESET}"
+sync
+partprobe "$disk" 2>/dev/null
+sleep 2
+echo -e "${GREEN}Partitioning complete!${RESET}"
 
 # --- Progress bar ---
-echo -n "${BLUE}["
+echo -ne "${BLUE}["
 for i in {1..20}; do echo -n "#"; sleep 0.05; done
-echo "] Done"
+echo -e "] Done${RESET}"
+
+# --- Detect partition naming scheme ---
+if [[ $disk == *"nvme"* ]] || [[ $disk == *"mmcblk"* ]]; then
+    part1="${disk}p1"
+    part2="${disk}p2"
+    part3="${disk}p3"
+else
+    part1="${disk}1"
+    part2="${disk}2"
+    part3="${disk}3"
+fi
 
 # --- Format & Mount ---
-echo "${GREEN}Formatting partitions...${RESET} 💾"
-mkfs.fat -F32 "${disk}1"
-mkswap "${disk}2"
-swapon "${disk}2"
-mkfs.ext4 "${disk}3"
+echo -e "${GREEN}Formatting partitions...${RESET} 💾"
+mkfs.fat -F32 "$part1"
+mkswap "$part2"
+swapon "$part2"
+mkfs.ext4 -F "$part3"
 
-echo "${GREEN}Mounting partitions...${RESET}"
-mount "${disk}3" /mnt
+echo -e "${GREEN}Mounting partitions...${RESET}"
+mount "$part3" /mnt
 mkdir -p /mnt/boot
-mount "${disk}1" /mnt/boot
+mount "$part1" /mnt/boot
 
 # --- Package selection ---
-PACKAGES=(base-system xbps xbps-src sudo git zsh networkmanager)
+PACKAGES=(base-system linux grub-x86_64-efi efibootmgr xbps sudo git zsh NetworkManager)
 
-echo "${CYAN}📦 Customize your packages!${RESET}"
+echo -e "${CYAN}📦 Customize your packages!${RESET}"
 
-echo -n "${NEON}Editors (vim nano emacs) ?: ${RESET}"
+echo -ne "${NEON}Editors (vim nano emacs) ?: ${RESET}"
 read editors
 [[ -n $editors ]] && PACKAGES+=($editors)
 
-echo -n "${NEON}Browsers (firefox chromium qutebrowser) ?: ${RESET}"
+echo -ne "${NEON}Browsers (firefox chromium) ?: ${RESET}"
 read browsers
 [[ -n $browsers ]] && PACKAGES+=($browsers)
 
-echo -n "${NEON}Utilities (htop neofetch tmux ranger) ?: ${RESET}"
+echo -ne "${NEON}Utilities (htop neofetch tmux ranger) ?: ${RESET}"
 read utils
 [[ -n $utils ]] && PACKAGES+=($utils)
 
 # Hyprland DE default packages
-PACKAGES+=(hyprland waybar wofi mako swaybg foot grim slurp wl-clipboard)
+PACKAGES+=(hyprland waybar wofi mako swaybg foot grim slurp wl-clipboard polkit)
 
-echo "${CYAN}📦 Installing packages:${RESET}"
+echo -e "${CYAN}📦 Installing packages:${RESET}"
 echo "${PACKAGES[@]}"
 
-echo -n "${CYAN}Installing "
+echo -ne "${CYAN}Installing "
 for i in {1..10}; do echo -n "⚡"; sleep 0.1; done
-echo ""
+echo -e "${RESET}"
 
-# Install packages
-for pkg in "${PACKAGES[@]}"; do
-    xbps-install -Sy --yes "$pkg"
-done
+# --- Copy RSA keys for package installation ---
+mkdir -p /mnt/var/db/xbps/keys
+cp -a /var/db/xbps/keys/* /mnt/var/db/xbps/keys/
+
+# Install base system
+XBPS_ARCH=x86_64 xbps-install -Sy -r /mnt -R https://repo-default.voidlinux.org/current "${PACKAGES[@]}"
 
 # --- Generate fstab ---
-genfstab -U /mnt > /mnt/etc/fstab
+echo -e "${GREEN}Generating fstab...${RESET}"
+cat > /mnt/etc/fstab << FSTAB_END
+# /etc/fstab: static file system information
+UUID=$(blkid -s UUID -o value "$part3")  /       ext4    defaults        0 1
+UUID=$(blkid -s UUID -o value "$part1")  /boot   vfat    defaults        0 2
+UUID=$(blkid -s UUID -o value "$part2")  none    swap    sw              0 0
+FSTAB_END
 
 # --- Chroot configuration ---
-echo "${GREEN}⚡ Entering chroot to finish setup...${RESET}"
+echo -e "${GREEN}⚡ Entering chroot to finish setup...${RESET}"
 
-chroot /mnt /bin/zsh <<'EOF'
-echo "$HOSTNAME" > /etc/hostname
+cat > /mnt/root/chroot_setup.sh << 'CHROOT_SCRIPT'
+#!/bin/bash
 
-echo "Set root password:"
-passwd
+# Set hostname
+echo "$CHROOT_HOSTNAME" > /etc/hostname
 
-useradd -m -G wheel -s /bin/zsh "$USERNAME"
-echo "Set password for $USERNAME:"
-passwd "$USERNAME"
+# Set root password
+echo "Setting root password..."
+echo "root:voidpunk" | chpasswd
+echo "✅ Root password set to: voidpunk (CHANGE THIS AFTER FIRST BOOT!)"
 
-sed -i 's/^# %wheel ALL=(ALL) ALL/%wheel ALL=(ALL) ALL/' /etc/sudoers
+# Create user
+useradd -m -G wheel -s /bin/bash "$CHROOT_USERNAME"
+echo "$CHROOT_USERNAME:voidpunk" | chpasswd
+echo "✅ User $CHROOT_USERNAME password set to: voidpunk"
 
-systemctl enable NetworkManager
+# Enable sudo for wheel group
+sed -i 's/^# %wheel ALL=(ALL:ALL) ALL/%wheel ALL=(ALL:ALL) ALL/' /etc/sudoers
 
-# --- Copy dotfiles ---
-DOTSRC="/root/home"  # Adjust to ISO dotfiles location
-DOTDEST="/home/$USERNAME"
+# Enable services
+ln -sf /etc/sv/NetworkManager /etc/runit/runsvdir/default/
+ln -sf /etc/sv/dbus /etc/runit/runsvdir/default/
+
+# Install and configure GRUB
+grub-install --target=x86_64-efi --efi-directory=/boot --bootloader-id=VoidPunk --recheck
+grub-mkconfig -o /boot/grub/grub.cfg
+
+# Configure locale
+echo "LANG=en_US.UTF-8" > /etc/locale.conf
+echo "en_US.UTF-8 UTF-8" >> /etc/default/libc-locales
+xbps-reconfigure -f glibc-locales
+
+# Copy dotfiles if available
+DOTSRC="/root/dotfiles"
+DOTDEST="/home/$CHROOT_USERNAME"
 if [ -d "$DOTSRC" ]; then
-    rsync -a "$DOTSRC/" "$DOTDEST/"
-    chown -R "$USERNAME:$USERNAME" "$DOTDEST"
-    echo "✅ Dotfiles copied to $DOTDEST"
+    cp -r "$DOTSRC/.config" "$DOTDEST/" 2>/dev/null
+    cp "$DOTSRC/.bashrc" "$DOTDEST/" 2>/dev/null
+    cp "$DOTSRC/.zshrc" "$DOTDEST/" 2>/dev/null
+    chown -R "$CHROOT_USERNAME:$CHROOT_USERNAME" "$DOTDEST"
+    echo "✅ Dotfiles copied"
 else
-    echo "⚠️ Dotfiles source $DOTSRC not found, skipping."
+    echo "⚠️ No dotfiles found at $DOTSRC"
 fi
 
 echo "✅ VoidPunk setup complete! Hyprland is default DE."
-EOF
+CHROOT_SCRIPT
 
-echo "${GREEN}🎉 Installation finished! Reboot to enter $username's VoidPunk Cyberpunk Desktop.${RESET}"
+chmod +x /mnt/root/chroot_setup.sh
+
+# Export variables for chroot
+export CHROOT_USERNAME="$username"
+export CHROOT_HOSTNAME="$hostname"
+
+# Execute chroot script
+chroot /mnt /usr/bin/env \
+    CHROOT_USERNAME="$username" \
+    CHROOT_HOSTNAME="$hostname" \
+    /bin/bash /root/chroot_setup.sh
+
+# Cleanup
+rm /mnt/root/chroot_setup.sh
+
+echo -e "${GREEN}🎉 Installation finished!${RESET}"
+echo -e "${YELLOW}Default password for root and $username: voidpunk${RESET}"
+echo -e "${RED}⚠️ CHANGE PASSWORDS AFTER FIRST BOOT! ⚠️${RESET}"
+echo -e "${CYAN}Reboot and remove installation media.${RESET}"
