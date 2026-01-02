@@ -99,7 +99,6 @@ if [[ $NETWORK_READY -eq 0 ]]; then
                 dhcpcd "$ETHERNET_IFACE" &
                 sleep 3
                 
-                # Test connection
                 if ping -c 1 -W 3 8.8.8.8 &>/dev/null; then
                     echo -e "${GREEN}✓ Ethernet connected!${RESET}"
                     NETWORK_READY=1
@@ -116,7 +115,6 @@ if [[ $NETWORK_READY -eq 0 ]]; then
                 echo -e "${CYAN}Setting up WiFi...${RESET}"
                 ip link set "$WIFI_IFACE" up
                 
-                # Check for wpa_supplicant or iwd
                 if command -v wpa_supplicant &>/dev/null; then
                     echo -e "${BLUE}Using wpa_supplicant${RESET}"
                     echo -ne "${NEON}WiFi SSID: ${RESET}"
@@ -125,10 +123,7 @@ if [[ $NETWORK_READY -eq 0 ]]; then
                     read -s wifi_pass
                     echo ""
                     
-                    # Create wpa_supplicant config
                     wpa_passphrase "$wifi_ssid" "$wifi_pass" > /tmp/wpa.conf
-                    
-                    # Connect
                     killall wpa_supplicant dhcpcd 2>/dev/null
                     wpa_supplicant -B -i "$WIFI_IFACE" -c /tmp/wpa.conf
                     sleep 3
@@ -304,183 +299,7 @@ case $part_choice in
         base_disk=$(echo $target_part | sed 's/p\?[0-9]*$//')
         
         echo -e "\n${YELLOW}Removing old partition...${RESET}"
-        part_num=$(echo $target_part | grep -o '[0-9]*
-        # ===== CUSTOM PARTITIONS =====
-        echo -e "\n${CYAN}Custom partition mode${RESET}"
-        echo -e "Select your existing partitions for installation\n"
-        
-        echo -e "${BOLD}You need:${RESET}"
-        echo -e "  ${GREEN}1.${RESET} Boot/EFI partition (FAT32, ~512MB)"
-        echo -e "  ${BLUE}2.${RESET} Swap partition (optional, ~2GB+)"
-        echo -e "  ${MAGENTA}3.${RESET} Root partition (ext4, rest of space)"
-        echo ""
-        
-        echo -ne "${NEON}Boot/EFI partition (e.g., nvme0n1p1): ${RESET}"
-        read part1_input
-        [[ $part1_input == /dev/* ]] && part1="$part1_input" || part1="/dev/$part1_input"
-        
-        echo -ne "${NEON}Swap partition (e.g., nvme0n1p2 or 'none' to skip): ${RESET}"
-        read part2_input
-        if [[ $part2_input == "none" ]]; then
-            part2=""
-        else
-            [[ $part2_input == /dev/* ]] && part2="$part2_input" || part2="/dev/$part2_input"
-        fi
-        
-        echo -ne "${NEON}Root partition (e.g., nvme0n1p3): ${RESET}"
-        read part3_input
-        [[ $part3_input == /dev/* ]] && part3="$part3_input" || part3="/dev/$part3_input"
-        
-        echo -e "\n${YELLOW}Selected partitions:${RESET}"
-        echo -e "  Boot: ${GREEN}$part1${RESET}"
-        [[ -n $part2 ]] && echo -e "  Swap: ${BLUE}$part2${RESET}" || echo -e "  Swap: ${YELLOW}none${RESET}"
-        echo -e "  Root: ${MAGENTA}$part3${RESET} ${RED}(will be formatted!)${RESET}"
-        
-        echo -ne "\nType ${BOLD}YES${RESET} to format and install: "
-        read confirm
-        if [[ $confirm != "YES" ]]; then
-            echo -e "${YELLOW}Canceled.${RESET}"
-            exit 1
-        fi
-        ;;
-        
-    *)
-        echo -e "${RED}Invalid choice. Exiting.${RESET}"
-        exit 1
-        ;;
-esac
-
-# --- Format & Mount ---
-echo -e "\n${GREEN}Formatting partitions...${RESET} 💾"
-mkfs.fat -F32 "$part1"
-
-if [[ -n $part2 ]]; then
-    mkswap "$part2"
-    swapon "$part2"
-fi
-
-mkfs.ext4 -F "$part3"
-
-echo -e "${GREEN}Mounting partitions...${RESET}"
-mount "$part3" /mnt
-mkdir -p /mnt/boot
-mount "$part1" /mnt/boot
-
-echo -e "${GREEN}✓ Partitions ready!${RESET}"
-lsblk | grep -E "$(basename $part1)|$(basename $part2)|$(basename $part3)"
-
-# --- Package selection ---
-PACKAGES=(base-system linux grub-x86_64-efi efibootmgr xbps sudo git zsh NetworkManager dhcpcd wpa_supplicant)
-
-echo -e "\n${CYAN}📦 Customize your packages!${RESET}"
-
-echo -ne "${NEON}Editors (vim nano emacs) ?: ${RESET}"
-read editors
-[[ -n $editors ]] && PACKAGES+=($editors)
-
-echo -ne "${NEON}Browsers (firefox chromium) ?: ${RESET}"
-read browsers
-[[ -n $browsers ]] && PACKAGES+=($browsers)
-
-echo -ne "${NEON}Utilities (htop neofetch tmux ranger) ?: ${RESET}"
-read utils
-[[ -n $utils ]] && PACKAGES+=($utils)
-
-# Hyprland DE default packages
-PACKAGES+=(hyprland waybar wofi mako swaybg foot grim slurp wl-clipboard polkit)
-
-echo -e "\n${CYAN}📦 Installing packages:${RESET}"
-echo "${PACKAGES[@]}"
-
-echo -ne "${CYAN}Installing "
-for i in {1..10}; do echo -n "⚡"; sleep 0.1; done
-echo -e "${RESET}"
-
-# --- Copy RSA keys for package installation ---
-mkdir -p /mnt/var/db/xbps/keys
-cp -a /var/db/xbps/keys/* /mnt/var/db/xbps/keys/
-
-# Install base system
-XBPS_ARCH=x86_64 xbps-install -Sy -r /mnt -R https://repo-default.voidlinux.org/current "${PACKAGES[@]}"
-
-# --- Generate fstab ---
-echo -e "${GREEN}Generating fstab...${RESET}"
-cat > /mnt/etc/fstab << FSTAB_END
-# /etc/fstab: static file system information
-UUID=$(blkid -s UUID -o value "$part3")  /       ext4    defaults        0 1
-UUID=$(blkid -s UUID -o value "$part1")  /boot   vfat    defaults        0 2
-FSTAB_END
-
-if [[ -n $part2 ]]; then
-    echo "UUID=$(blkid -s UUID -o value "$part2")  none    swap    sw              0 0" >> /mnt/etc/fstab
-fi
-
-# --- Chroot configuration ---
-echo -e "${GREEN}⚡ Entering chroot to finish setup...${RESET}"
-
-cat > /mnt/root/chroot_setup.sh << 'CHROOT_SCRIPT'
-#!/bin/bash
-
-# Set hostname
-echo "$CHROOT_HOSTNAME" > /etc/hostname
-
-# Set root password
-echo "Setting root password..."
-echo "root:voidpunk" | chpasswd
-echo "✅ Root password set to: voidpunk (CHANGE THIS AFTER FIRST BOOT!)"
-
-# Create user
-useradd -m -G wheel -s /bin/bash "$CHROOT_USERNAME"
-echo "$CHROOT_USERNAME:voidpunk" | chpasswd
-echo "✅ User $CHROOT_USERNAME password set to: voidpunk"
-
-# Enable sudo for wheel group
-sed -i 's/^# %wheel ALL=(ALL:ALL) ALL/%wheel ALL=(ALL:ALL) ALL/' /etc/sudoers
-
-# Enable services
-ln -sf /etc/sv/NetworkManager /etc/runit/runsvdir/default/
-ln -sf /etc/sv/dbus /etc/runit/runsvdir/default/
-
-# Install and configure GRUB
-grub-install --target=x86_64-efi --efi-directory=/boot --bootloader-id=VoidPunk --recheck
-grub-mkconfig -o /boot/grub/grub.cfg
-
-# Configure locale
-echo "LANG=en_US.UTF-8" > /etc/locale.conf
-echo "en_US.UTF-8 UTF-8" >> /etc/default/libc-locales
-xbps-reconfigure -f glibc-locales
-
-# Copy dotfiles if available
-DOTSRC="/root/dotfiles"
-DOTDEST="/home/$CHROOT_USERNAME"
-if [ -d "$DOTSRC" ]; then
-    cp -r "$DOTSRC/.config" "$DOTDEST/" 2>/dev/null
-    cp "$DOTSRC/.bashrc" "$DOTDEST/" 2>/dev/null
-    cp "$DOTSRC/.zshrc" "$DOTDEST/" 2>/dev/null
-    chown -R "$CHROOT_USERNAME:$CHROOT_USERNAME" "$DOTDEST"
-    echo "✅ Dotfiles copied"
-else
-    echo "⚠️ No dotfiles found at $DOTSRC"
-fi
-
-echo "✅ VoidPunk setup complete! Hyprland is default DE."
-CHROOT_SCRIPT
-
-chmod +x /mnt/root/chroot_setup.sh
-
-# Execute chroot script
-chroot /mnt /usr/bin/env \
-    CHROOT_USERNAME="$username" \
-    CHROOT_HOSTNAME="$hostname" \
-    /bin/bash /root/chroot_setup.sh
-
-# Cleanup
-rm /mnt/root/chroot_setup.sh
-
-echo -e "\n${GREEN}🎉 Installation finished!${RESET}"
-echo -e "${YELLOW}Default password for root and $username: voidpunk${RESET}"
-echo -e "${RED}⚠️ CHANGE PASSWORDS AFTER FIRST BOOT! ⚠️${RESET}"
-echo -e "${CYAN}Reboot and remove installation media.${RESET}\n")
+        part_num=$(echo $target_part | grep -o '[0-9]*$')
         parted -s "$base_disk" rm "$part_num"
         sync
         sleep 2
@@ -515,21 +334,23 @@ echo -e "${CYAN}Reboot and remove installation media.${RESET}\n")
         ;;
         
     3)
-        # ===== CUSTOM PARTITIONS =====
-        echo -e "\n${CYAN}Custom partition mode${RESET}"
-        echo -e "Select your existing partitions for installation\n"
+        # ===== OPTION 3: FULL MANUAL =====
+        echo -e "\n${CYAN}╔════════════════════════════════════════════╗${RESET}"
+        echo -e "${CYAN}║  MANUAL MODE                               ║${RESET}"
+        echo -e "${CYAN}║  You choose each partition                 ║${RESET}"
+        echo -e "${CYAN}╚════════════════════════════════════════════╝${RESET}"
         
-        echo -e "${BOLD}You need:${RESET}"
-        echo -e "  ${GREEN}1.${RESET} Boot/EFI partition (FAT32, ~512MB)"
-        echo -e "  ${BLUE}2.${RESET} Swap partition (optional, ~2GB+)"
-        echo -e "  ${MAGENTA}3.${RESET} Root partition (ext4, rest of space)"
+        echo -e "\n${BOLD}You need these partitions:${RESET}"
+        echo -e "  ${GREEN}1.${RESET} Boot/EFI - FAT32, ~512MB"
+        echo -e "  ${BLUE}2.${RESET} Swap - optional, ~2GB+"
+        echo -e "  ${MAGENTA}3.${RESET} Root - ext4, rest of space"
         echo ""
         
         echo -ne "${NEON}Boot/EFI partition (e.g., nvme0n1p1): ${RESET}"
         read part1_input
         [[ $part1_input == /dev/* ]] && part1="$part1_input" || part1="/dev/$part1_input"
         
-        echo -ne "${NEON}Swap partition (e.g., nvme0n1p2 or 'none' to skip): ${RESET}"
+        echo -ne "${NEON}Swap partition (e.g., nvme0n1p2 or 'none'): ${RESET}"
         read part2_input
         if [[ $part2_input == "none" ]]; then
             part2=""
@@ -615,12 +436,11 @@ XBPS_ARCH=x86_64 xbps-install -Sy -r /mnt -R https://repo-default.voidlinux.org/
 
 # --- Generate fstab ---
 echo -e "${GREEN}Generating fstab...${RESET}"
-cat > /mnt/etc/fstab << FSTAB_END
+cat > /mnt/etc/fstab <<'FSTAB_END'
 # /etc/fstab: static file system information
-UUID=$(blkid -s UUID -o value "$part3")  /       ext4    defaults        0 1
-UUID=$(blkid -s UUID -o value "$part1")  /boot   vfat    defaults        0 2
 FSTAB_END
-
+echo "UUID=$(blkid -s UUID -o value "$part3")  /       ext4    defaults        0 1" >> /mnt/etc/fstab
+echo "UUID=$(blkid -s UUID -o value "$part1")  /boot   vfat    defaults        0 2" >> /mnt/etc/fstab
 if [[ -n $part2 ]]; then
     echo "UUID=$(blkid -s UUID -o value "$part2")  none    swap    sw              0 0" >> /mnt/etc/fstab
 fi
@@ -628,7 +448,7 @@ fi
 # --- Chroot configuration ---
 echo -e "${GREEN}⚡ Entering chroot to finish setup...${RESET}"
 
-cat > /mnt/root/chroot_setup.sh << 'CHROOT_SCRIPT'
+cat > /mnt/root/chroot_setup.sh <<'EOF'
 #!/bin/bash
 
 # Set hostname
@@ -637,15 +457,17 @@ echo "$CHROOT_HOSTNAME" > /etc/hostname
 # Set root password
 echo "Setting root password..."
 echo "root:voidpunk" | chpasswd
-echo "✅ Root password set to: voidpunk (CHANGE THIS AFTER FIRST BOOT!)"
+echo "Root password set to: voidpunk (CHANGE THIS AFTER FIRST BOOT!)"
 
 # Create user
 useradd -m -G wheel -s /bin/bash "$CHROOT_USERNAME"
 echo "$CHROOT_USERNAME:voidpunk" | chpasswd
-echo "✅ User $CHROOT_USERNAME password set to: voidpunk"
+echo "User $CHROOT_USERNAME password set to: voidpunk"
 
-# Enable sudo for wheel group
-sed -i 's/^# %wheel ALL=(ALL:ALL) ALL/%wheel ALL=(ALL:ALL) ALL/' /etc/sudoers
+# Enable sudo for wheel group - simple append method
+if ! grep -q "^%wheel" /etc/sudoers; then
+    echo "%wheel ALL=(ALL:ALL) ALL" >> /etc/sudoers
+fi
 
 # Enable services
 ln -sf /etc/sv/NetworkManager /etc/runit/runsvdir/default/
@@ -668,13 +490,13 @@ if [ -d "$DOTSRC" ]; then
     cp "$DOTSRC/.bashrc" "$DOTDEST/" 2>/dev/null
     cp "$DOTSRC/.zshrc" "$DOTDEST/" 2>/dev/null
     chown -R "$CHROOT_USERNAME:$CHROOT_USERNAME" "$DOTDEST"
-    echo "✅ Dotfiles copied"
+    echo "Dotfiles copied"
 else
-    echo "⚠️ No dotfiles found at $DOTSRC"
+    echo "No dotfiles found at $DOTSRC"
 fi
 
-echo "✅ VoidPunk setup complete! Hyprland is default DE."
-CHROOT_SCRIPT
+echo "VoidPunk setup complete! Hyprland is default DE."
+EOF
 
 chmod +x /mnt/root/chroot_setup.sh
 
