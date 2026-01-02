@@ -197,7 +197,7 @@ lsblk -o NAME,SIZE,TYPE,FSTYPE,MOUNTPOINT
 
 echo -e "\n${NEON}Installation mode:${RESET}"
 echo -e "  ${BOLD}1)${RESET} Whole disk - Wipe everything and auto-partition ${RED}(DESTROYS ALL DATA)${RESET}"
-echo -e "  ${BOLD}2)${RESET} Auto-partition - Script creates partitions on chosen disk"
+echo -e "  ${BOLD}2)${RESET} Auto-partition - Choose a partition, script subdivides it"
 echo -e "  ${BOLD}3)${RESET} Manual - I'll choose each partition myself"
 echo -ne "\n${NEON}Choice [1-3]: ${RESET}"
 read part_choice
@@ -259,24 +259,40 @@ case $part_choice in
         ;;
         
     2)
-        # ===== OPTION 2: AUTO-PARTITION (NO WIPE) =====
+        # ===== OPTION 2: AUTO-PARTITION ON CHOSEN PARTITION =====
         echo -e "\n${CYAN}╔════════════════════════════════════════════╗${RESET}"
         echo -e "${CYAN}║  AUTO-PARTITION MODE                       ║${RESET}"
-        echo -e "${CYAN}║  Script will create partitions for you     ║${RESET}"
+        echo -e "${CYAN}║  Choose a partition to subdivide           ║${RESET}"
         echo -e "${CYAN}╚════════════════════════════════════════════╝${RESET}"
         
+        echo -e "\n${MAGENTA}Available partitions:${RESET}"
+        lsblk -o NAME,SIZE,TYPE,FSTYPE,MOUNTPOINT
+        
         while true; do
-            echo -ne "\n${NEON}Enter disk to partition (e.g., nvme0n1 or /dev/nvme0n1): ${RESET}"
-            read disk_input
-            [[ $disk_input == /dev/* ]] && disk="$disk_input" || disk="/dev/$disk_input"
-            [[ -b "$disk" ]] && break || echo -e "${RED}Invalid disk. Try again.${RESET}"
+            echo -ne "\n${NEON}Enter partition to use (e.g., nvme0n1p5 or /dev/nvme0n1p5): ${RESET}"
+            read target_input
+            [[ $target_input == /dev/* ]] && target_part="$target_input" || target_part="/dev/$target_input"
+            [[ -b "$target_part" ]] && break || echo -e "${RED}Invalid partition. Try again.${RESET}"
         done
 
-        echo -e "\n${YELLOW}Current partitions on $disk:${RESET}"
-        lsblk "$disk"
+        # Get partition size and start
+        part_info=$(parted -s "$(echo $target_part | sed 's/p\?[0-9]*$//')" unit MiB print | grep "$(basename $target_part)")
+        part_start=$(echo "$part_info" | awk '{print $2}' | sed 's/MiB//')
+        part_end=$(echo "$part_info" | awk '{print $3}' | sed 's/MiB//')
+        part_size=$((part_end - part_start))
+
+        echo -e "\n${YELLOW}Partition: $target_part${RESET}"
+        echo -e "${YELLOW}Size: ${part_size}MiB (~$((part_size/1024))GB)${RESET}"
         
-        echo -e "\n${YELLOW}⚠️  This will create NEW partitions on $disk${RESET}"
-        echo -e "${YELLOW}⚠️  Existing data may be lost!${RESET}"
+        if [[ $part_size -lt 10240 ]]; then
+            echo -e "${RED}⚠️  Warning: Partition is small (<10GB). Installation may fail.${RESET}"
+        fi
+
+        echo -e "\n${YELLOW}⚠️  This will ERASE $target_part and create:${RESET}"
+        echo -e "  ${GREEN}•${RESET} 512MB EFI boot"
+        echo -e "  ${BLUE}•${RESET} 2GB swap"
+        echo -e "  ${MAGENTA}•${RESET} Rest for root"
+        
         echo -ne "\nType ${BOLD}YES${RESET} to continue: "
         read confirm
         if [[ $confirm != "YES" ]]; then
@@ -284,34 +300,218 @@ case $part_choice in
             exit 1
         fi
 
-        echo -e "\n${CYAN}Creating fresh GPT partition table...${RESET}"
-        parted --script "$disk" mklabel gpt
+        # Get base disk
+        base_disk=$(echo $target_part | sed 's/p\?[0-9]*$//')
         
-        echo -e "${CYAN}Creating partitions...${RESET}"
-        echo -e "  ${GREEN}•${RESET} 512MB EFI boot"
-        echo -e "  ${BLUE}•${RESET} 2GB swap"
-        echo -e "  ${MAGENTA}•${RESET} Rest for root"
+        echo -e "\n${YELLOW}Removing old partition...${RESET}"
+        part_num=$(echo $target_part | grep -o '[0-9]*
+        # ===== CUSTOM PARTITIONS =====
+        echo -e "\n${CYAN}Custom partition mode${RESET}"
+        echo -e "Select your existing partitions for installation\n"
         
-        parted --script "$disk" mkpart primary fat32 1MiB 513MiB
-        parted --script "$disk" set 1 boot on
-        parted --script "$disk" mkpart primary linux-swap 513MiB 2.5GiB
-        parted --script "$disk" mkpart primary ext4 2.5GiB 100%
+        echo -e "${BOLD}You need:${RESET}"
+        echo -e "  ${GREEN}1.${RESET} Boot/EFI partition (FAT32, ~512MB)"
+        echo -e "  ${BLUE}2.${RESET} Swap partition (optional, ~2GB+)"
+        echo -e "  ${MAGENTA}3.${RESET} Root partition (ext4, rest of space)"
+        echo ""
+        
+        echo -ne "${NEON}Boot/EFI partition (e.g., nvme0n1p1): ${RESET}"
+        read part1_input
+        [[ $part1_input == /dev/* ]] && part1="$part1_input" || part1="/dev/$part1_input"
+        
+        echo -ne "${NEON}Swap partition (e.g., nvme0n1p2 or 'none' to skip): ${RESET}"
+        read part2_input
+        if [[ $part2_input == "none" ]]; then
+            part2=""
+        else
+            [[ $part2_input == /dev/* ]] && part2="$part2_input" || part2="/dev/$part2_input"
+        fi
+        
+        echo -ne "${NEON}Root partition (e.g., nvme0n1p3): ${RESET}"
+        read part3_input
+        [[ $part3_input == /dev/* ]] && part3="$part3_input" || part3="/dev/$part3_input"
+        
+        echo -e "\n${YELLOW}Selected partitions:${RESET}"
+        echo -e "  Boot: ${GREEN}$part1${RESET}"
+        [[ -n $part2 ]] && echo -e "  Swap: ${BLUE}$part2${RESET}" || echo -e "  Swap: ${YELLOW}none${RESET}"
+        echo -e "  Root: ${MAGENTA}$part3${RESET} ${RED}(will be formatted!)${RESET}"
+        
+        echo -ne "\nType ${BOLD}YES${RESET} to format and install: "
+        read confirm
+        if [[ $confirm != "YES" ]]; then
+            echo -e "${YELLOW}Canceled.${RESET}"
+            exit 1
+        fi
+        ;;
+        
+    *)
+        echo -e "${RED}Invalid choice. Exiting.${RESET}"
+        exit 1
+        ;;
+esac
+
+# --- Format & Mount ---
+echo -e "\n${GREEN}Formatting partitions...${RESET} 💾"
+mkfs.fat -F32 "$part1"
+
+if [[ -n $part2 ]]; then
+    mkswap "$part2"
+    swapon "$part2"
+fi
+
+mkfs.ext4 -F "$part3"
+
+echo -e "${GREEN}Mounting partitions...${RESET}"
+mount "$part3" /mnt
+mkdir -p /mnt/boot
+mount "$part1" /mnt/boot
+
+echo -e "${GREEN}✓ Partitions ready!${RESET}"
+lsblk | grep -E "$(basename $part1)|$(basename $part2)|$(basename $part3)"
+
+# --- Package selection ---
+PACKAGES=(base-system linux grub-x86_64-efi efibootmgr xbps sudo git zsh NetworkManager dhcpcd wpa_supplicant)
+
+echo -e "\n${CYAN}📦 Customize your packages!${RESET}"
+
+echo -ne "${NEON}Editors (vim nano emacs) ?: ${RESET}"
+read editors
+[[ -n $editors ]] && PACKAGES+=($editors)
+
+echo -ne "${NEON}Browsers (firefox chromium) ?: ${RESET}"
+read browsers
+[[ -n $browsers ]] && PACKAGES+=($browsers)
+
+echo -ne "${NEON}Utilities (htop neofetch tmux ranger) ?: ${RESET}"
+read utils
+[[ -n $utils ]] && PACKAGES+=($utils)
+
+# Hyprland DE default packages
+PACKAGES+=(hyprland waybar wofi mako swaybg foot grim slurp wl-clipboard polkit)
+
+echo -e "\n${CYAN}📦 Installing packages:${RESET}"
+echo "${PACKAGES[@]}"
+
+echo -ne "${CYAN}Installing "
+for i in {1..10}; do echo -n "⚡"; sleep 0.1; done
+echo -e "${RESET}"
+
+# --- Copy RSA keys for package installation ---
+mkdir -p /mnt/var/db/xbps/keys
+cp -a /var/db/xbps/keys/* /mnt/var/db/xbps/keys/
+
+# Install base system
+XBPS_ARCH=x86_64 xbps-install -Sy -r /mnt -R https://repo-default.voidlinux.org/current "${PACKAGES[@]}"
+
+# --- Generate fstab ---
+echo -e "${GREEN}Generating fstab...${RESET}"
+cat > /mnt/etc/fstab << FSTAB_END
+# /etc/fstab: static file system information
+UUID=$(blkid -s UUID -o value "$part3")  /       ext4    defaults        0 1
+UUID=$(blkid -s UUID -o value "$part1")  /boot   vfat    defaults        0 2
+FSTAB_END
+
+if [[ -n $part2 ]]; then
+    echo "UUID=$(blkid -s UUID -o value "$part2")  none    swap    sw              0 0" >> /mnt/etc/fstab
+fi
+
+# --- Chroot configuration ---
+echo -e "${GREEN}⚡ Entering chroot to finish setup...${RESET}"
+
+cat > /mnt/root/chroot_setup.sh << 'CHROOT_SCRIPT'
+#!/bin/bash
+
+# Set hostname
+echo "$CHROOT_HOSTNAME" > /etc/hostname
+
+# Set root password
+echo "Setting root password..."
+echo "root:voidpunk" | chpasswd
+echo "✅ Root password set to: voidpunk (CHANGE THIS AFTER FIRST BOOT!)"
+
+# Create user
+useradd -m -G wheel -s /bin/bash "$CHROOT_USERNAME"
+echo "$CHROOT_USERNAME:voidpunk" | chpasswd
+echo "✅ User $CHROOT_USERNAME password set to: voidpunk"
+
+# Enable sudo for wheel group
+sed -i 's/^# %wheel ALL=(ALL:ALL) ALL/%wheel ALL=(ALL:ALL) ALL/' /etc/sudoers
+
+# Enable services
+ln -sf /etc/sv/NetworkManager /etc/runit/runsvdir/default/
+ln -sf /etc/sv/dbus /etc/runit/runsvdir/default/
+
+# Install and configure GRUB
+grub-install --target=x86_64-efi --efi-directory=/boot --bootloader-id=VoidPunk --recheck
+grub-mkconfig -o /boot/grub/grub.cfg
+
+# Configure locale
+echo "LANG=en_US.UTF-8" > /etc/locale.conf
+echo "en_US.UTF-8 UTF-8" >> /etc/default/libc-locales
+xbps-reconfigure -f glibc-locales
+
+# Copy dotfiles if available
+DOTSRC="/root/dotfiles"
+DOTDEST="/home/$CHROOT_USERNAME"
+if [ -d "$DOTSRC" ]; then
+    cp -r "$DOTSRC/.config" "$DOTDEST/" 2>/dev/null
+    cp "$DOTSRC/.bashrc" "$DOTDEST/" 2>/dev/null
+    cp "$DOTSRC/.zshrc" "$DOTDEST/" 2>/dev/null
+    chown -R "$CHROOT_USERNAME:$CHROOT_USERNAME" "$DOTDEST"
+    echo "✅ Dotfiles copied"
+else
+    echo "⚠️ No dotfiles found at $DOTSRC"
+fi
+
+echo "✅ VoidPunk setup complete! Hyprland is default DE."
+CHROOT_SCRIPT
+
+chmod +x /mnt/root/chroot_setup.sh
+
+# Execute chroot script
+chroot /mnt /usr/bin/env \
+    CHROOT_USERNAME="$username" \
+    CHROOT_HOSTNAME="$hostname" \
+    /bin/bash /root/chroot_setup.sh
+
+# Cleanup
+rm /mnt/root/chroot_setup.sh
+
+echo -e "\n${GREEN}🎉 Installation finished!${RESET}"
+echo -e "${YELLOW}Default password for root and $username: voidpunk${RESET}"
+echo -e "${RED}⚠️ CHANGE PASSWORDS AFTER FIRST BOOT! ⚠️${RESET}"
+echo -e "${CYAN}Reboot and remove installation media.${RESET}\n")
+        parted -s "$base_disk" rm "$part_num"
         sync
-        partprobe "$disk" 2>/dev/null
+        sleep 2
+
+        echo -e "${CYAN}Creating new partitions in freed space...${RESET}"
+        
+        boot_end=$((part_start + 512))
+        swap_end=$((boot_end + 2048))
+        
+        parted -s "$base_disk" mkpart primary fat32 "${part_start}MiB" "${boot_end}MiB"
+        parted -s "$base_disk" set "$part_num" boot on
+        parted -s "$base_disk" mkpart primary linux-swap "${boot_end}MiB" "${swap_end}MiB"
+        parted -s "$base_disk" mkpart primary ext4 "${swap_end}MiB" "${part_end}MiB"
+        
+        sync
+        partprobe "$base_disk" 2>/dev/null
         sleep 3
 
-        if [[ $disk == *"nvme"* ]] || [[ $disk == *"mmcblk"* ]]; then
-            part1="${disk}p1"
-            part2="${disk}p2"
-            part3="${disk}p3"
+        # Assign partition variables
+        if [[ $base_disk == *"nvme"* ]] || [[ $base_disk == *"mmcblk"* ]]; then
+            part1="${base_disk}p${part_num}"
+            part2="${base_disk}p$((part_num + 1))"
+            part3="${base_disk}p$((part_num + 2))"
         else
-            part1="${disk}1"
-            part2="${disk}2"
-            part3="${disk}3"
+            part1="${base_disk}${part_num}"
+            part2="${base_disk}$((part_num + 1))"
+            part3="${base_disk}$((part_num + 2))"
         fi
 
         echo -e "${GREEN}✓ Partitions created!${RESET}"
-        lsblk "$disk"
+        lsblk "$base_disk"
         ;;
         
     3)
