@@ -2,11 +2,12 @@
 # =============================================
 # Root .zshrc for VoidPunk OS Installer
 # Theme: Cyberpunk
-# Fully CLI, guided experience
+# Experience: Guided CLI, ASCII banner, neon colors
 # =============================================
 
 autoload -U colors && colors
-# Cyberpunk neon colors
+
+# Neon colors
 NEON_PINK=$fg[magenta]
 NEON_BLUE=$fg[blue]
 NEON_CYAN=$fg[cyan]
@@ -15,17 +16,32 @@ NEON_YELLOW=$fg[yellow]
 NEON_RED=$fg[red]
 RESET=$reset
 
-echo "${NEON_CYAN}============================================${RESET}"
-echo "${NEON_PINK}  Welcome to the VoidPunk Cyberpunk Installer${RESET}"
-echo "${NEON_CYAN}============================================${RESET}"
+# ===========================
+# Cyberpunk ASCII Banner
+# ===========================
+echo "${NEON_PINK}"
+echo " __      __     _ ____  _   _ _   _ _   _ _  _ "
+echo " \ \    / /    | |  _ \| | | | \ | | \ | | || |"
+echo "  \ \  / /__ __| | |_) | | | |  \| |  \| | || |_"
+echo "   \ \/ / _ \ '__|  __/| | | | . \` | . \` |__   _|"
+echo "    \  /  __/ |  | |   | |_| | |\  | |\  |  | |  "
+echo "     \/ \___|_|  |_|    \___/|_| \_|_| \_|  |_|  "
+echo "               ${NEON_CYAN}3000AC${NEON_PINK}"
+echo "${RESET}"
 
-# --------- Basic System Setup ---------
+# ===========================
+# Guided Installer Variables
+# ===========================
+echo "${NEON_CYAN}--- Welcome to the VoidPunk Cyberpunk Installer ---${RESET}"
+
+# Disk & Filesystem
 read -p "${NEON_YELLOW}Enter target disk [/dev/sda]: ${RESET}" DISK
 DISK=${DISK:-/dev/sda}
 
 read -p "${NEON_YELLOW}Enter filesystem type (ext4/btrfs/xfs/f2fs/reiserfs) [ext4]: ${RESET}" FILE_SYSTEM_TYPE
 FILE_SYSTEM_TYPE=${FILE_SYSTEM_TYPE:-ext4}
 
+# User & Host
 read -p "${NEON_YELLOW}Enter username [voidpunk]: ${RESET}" USERNAME
 USERNAME=${USERNAME:-voidpunk}
 
@@ -36,13 +52,14 @@ PASSWORD=${PASSWORD:-voidpunk}
 read -p "${NEON_YELLOW}Enter hostname [voidpunk]: ${RESET}" HOSTNAME
 HOSTNAME=${HOSTNAME:-voidpunk}
 
+# Locale & Timezone
 read -p "${NEON_YELLOW}Enter locale [en_US.UTF-8]: ${RESET}" LOCALE
 LOCALE=${LOCALE:-en_US.UTF-8}
 
 read -p "${NEON_YELLOW}Enter timezone [Asia/Colombo]: ${RESET}" TIMEZONE
 TIMEZONE=${TIMEZONE:-Asia/Colombo}
 
-# --------- User Experience Choices ---------
+# Code Editor / Text Editor / Media Player
 echo "${NEON_CYAN}--- Choose your Code Editor ---${RESET}"
 echo "${NEON_PINK}Options: vim, nano, neovim, emacs${RESET}"
 read -p "${NEON_YELLOW}Default code editor [vim]: ${RESET}" CODE_EDITOR
@@ -58,11 +75,13 @@ echo "${NEON_PINK}Options: mpv, vlc, audacious${RESET}"
 read -p "${NEON_YELLOW}Default media player [mpv]: ${RESET}" MEDIA_PLAYER
 MEDIA_PLAYER=${MEDIA_PLAYER:-mpv}
 
-echo "${NEON_CYAN}--- Optional Packages ---${RESET}"
+# Packages
 read -p "${NEON_YELLOW}Enter other packages (space-separated) [base linux linux-firmware sudo git]: ${RESET}" PACKAGES
 PACKAGES=${PACKAGES:-"base linux linux-firmware sudo git"}
 
-# --------- Show Summary ---------
+# ===========================
+# Summary
+# ===========================
 echo "${NEON_GREEN}✅ Setup complete! Here are your selections:${RESET}"
 echo "${NEON_CYAN}Disk: ${DISK}${RESET}"
 echo "${NEON_CYAN}Filesystem: ${FILE_SYSTEM_TYPE}${RESET}"
@@ -75,6 +94,8 @@ echo "${NEON_CYAN}Text Editor: ${TEXT_EDITOR}${RESET}"
 echo "${NEON_CYAN}Media Player: ${MEDIA_PLAYER}${RESET}"
 echo "${NEON_CYAN}Packages: ${PACKAGES}${RESET}"
 
-# --------- Export variables for installer script ---------
+# ===========================
+# Export Variables
+# ===========================
 export DISK FILE_SYSTEM_TYPE USERNAME PASSWORD HOSTNAME LOCALE TIMEZONE
 export CODE_EDITOR TEXT_EDITOR MEDIA_PLAYER PACKAGES
