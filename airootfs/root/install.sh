@@ -1,66 +1,87 @@
 #!/usr/bin/env bash
+set -euo pipefail
 
-echo "Please enter EFI paritition: (example /dev/sda1 or /dev/nvme0n1p1)"
-read EFI
+echo "============================"
+echo " Arch Linux Automated Installer "
+echo "============================"
 
-echo "Please enter Root(/) paritition: (example /dev/sda3)"
-read ROOT  
+read -rp "Enter EFI partition (e.g., /dev/sda1 or /dev/nvme0n1p1): " EFI
+read -rp "Enter Root (/) partition (e.g., /dev/sda3): " ROOT
+read -rp "Enter Username: " USER
+read -rp "Enter Full Name: " NAME
+read -rsp "Enter Password: " PASSWORD
+echo
 
-echo "Please enter your Username"
-read USER 
+# -------------------------------
+# Filesystem creation
+# -------------------------------
+echo -e "\nCreating filesystems...\n"
 
-echo "Please enter your Full Name"
-read NAME 
-
-echo "Please enter your Password"
-read PASSWORD 
-
-# make filesystems
-echo -e "\nCreating Filesystems...\n"
-
-existing_fs=$(blkid -s TYPE -o value "$EFI")
-if [[ "$existing_fs" != "vfat" ]]; then
+if ! blkid "$EFI" | grep -q "vfat"; then
+    echo "Formatting EFI partition as FAT32..."
     mkfs.vfat -F32 "$EFI"
+else
+    echo "EFI partition already formatted."
 fi
 
-mkfs.ext4 "${ROOT}"
+echo "Formatting root partition as ext4..."
+mkfs.ext4 "$ROOT"
 
-# mount target
-mount "${ROOT}" /mnt
-ROOT_UUID=$(blkid -s UUID -o value "$ROOT")
-mount --mkdir "$EFI" /mnt/boot/efi
+# -------------------------------
+# Mounting
+# -------------------------------
+mount "$ROOT" /mnt
+mkdir -p /mnt/boot/efi
+mount "$EFI" /mnt/boot/efi
 
-
+# -------------------------------
+# Install base system
+# -------------------------------
 echo "--------------------------------------"
-echo "-- INSTALLING Base Arch Linux --"
+echo "-- Installing base system --"
 echo "--------------------------------------"
-pacstrap /mnt base base-devel linux linux-firmware linux-headers networkmanager wireless_tools nano intel-ucode bluez bluez-utils git --noconfirm --needed
 
-# fstab
+pacstrap /mnt base base-devel linux linux-firmware linux-headers \
+    networkmanager wireless_tools nano intel-ucode bluez bluez-utils git --noconfirm --needed
+
+# -------------------------------
+# Generate fstab
+# -------------------------------
 genfstab -U /mnt >> /mnt/etc/fstab
 
-cat <<REALEND > /mnt/next.sh
-useradd -m $USER
-usermod -c "${NAME}" $USER
-usermod -aG wheel,storage,power,audio,video $USER
-echo $USER:$PASSWORD | chpasswd
-sed -i 's/^# %wheel ALL=(ALL:ALL) ALL/%wheel ALL=(ALL:ALL) ALL/' /etc/sudoers
-sed -i 's/^%wheel ALL=(ALL:ALL) ALL/%wheel ALL=(ALL:ALL) NOPASSWD: ALL/' /etc/sudoers
+# -------------------------------
+# Arch-chroot configuration
+# -------------------------------
+arch-chroot /mnt /bin/bash <<EOF
+set -e
 
-echo "-------------------------------------------------"
-echo "Setup Language to US and set locale"
-echo "-------------------------------------------------"
+# -------------------------------
+# User setup
+# -------------------------------
+useradd -m -G wheel,storage,power,audio,video "$USER"
+usermod -c "$NAME" "$USER"
+echo "$USER:$PASSWORD" | chpasswd
+
+# Allow wheel group to sudo without password
+sed -i 's/^# %wheel ALL=(ALL:ALL) ALL/%wheel ALL=(ALL:ALL) NOPASSWD: ALL/' /etc/sudoers
+
+# -------------------------------
+# Localization & timezone
+# -------------------------------
 sed -i 's/^#en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen
 locale-gen
-echo "LANG=en_US.UTF-8" >> /etc/locale.conf
+echo "LANG=en_US.UTF-8" > /etc/locale.conf
 
 ln -sf /usr/share/zoneinfo/Asia/Kathmandu /etc/localtime
 hwclock --systohc
 
+# -------------------------------
+# Hostname & hosts
+# -------------------------------
 echo "asus-f15" > /etc/hostname
-cat <<EOF > /etc/hosts
+cat > /etc/hosts <<HOSTS
 127.0.0.1	localhost
-::1			localhost
+::1		localhost
 127.0.1.1	asus-f15.localdomain	asus-f15
 127.0.0.1   front1.rms.local
 192.168.0.124 front1.rms
@@ -68,32 +89,35 @@ cat <<EOF > /etc/hosts
 192.168.0.153 front1.ims
 127.0.0.1   front1.dpms.local
 192.168.0.164 front1.dpms
-EOF
+HOSTS
 
-echo "-------------------------------------------------"
-echo "Audio Drivers"
-echo "-------------------------------------------------"
+# -------------------------------
+# Audio & Graphics drivers
+# -------------------------------
+pacman -S --noconfirm --needed mesa-utils nvidia nvidia-utils nvidia-settings opencl-nvidia nvidia-prime \
+    pipewire pipewire-alsa pipewire-pulse
 
-pacman -S mesa-utils nvidia nvidia-utils nvidia-settings opencl-nvidia nvidia-prime pipewire pipewire-alsa pipewire-pulse --noconfirm --needed
-
+# Enable services
 systemctl enable NetworkManager bluetooth
 systemctl --user enable pipewire pipewire-pulse
 
-echo "--------------------------------------"
-echo "-- Bootloader Installation  --"
-echo "--------------------------------------"
-
-pacman -S grub efibootmgr --noconfirm --needed
-grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id="Linux Boot Manager" --modules="normal test efi_gop efi_uga search echo linux all_video gfxmenu gfxterm_background gfxterm_menu gfxterm loadenv configfile tpm" --disable-shim-lock
+# -------------------------------
+# Bootloader
+# -------------------------------
+pacman -S --noconfirm --needed grub efibootmgr
+grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id="Linux Boot Manager" \
+    --modules="normal test efi_gop efi_uga search echo linux all_video gfxmenu gfxterm_background gfxterm_menu gfxterm loadenv configfile tpm" \
+    --disable-shim-lock
 grub-mkconfig -o /boot/grub/grub.cfg
 
-cd /home/sandip
-git clone https://github.com/sandipsky/dotfiles
+# -------------------------------
+# Optional: dotfiles clone
+# -------------------------------
+cd /home/$USER
+sudo -u $USER git clone https://github.com/sandipsky/dotfiles
 
-echo "-------------------------------------------------"
-echo "Install Complete, You can reboot now"
-echo "-------------------------------------------------"
+EOF
 
-REALEND
-
-arch-chroot /mnt sh next.sh
+echo "--------------------------------------"
+echo "Installation complete! You can reboot now."
+echo "--------------------------------------"
