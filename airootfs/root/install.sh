@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# ArchRiot Setup - Bulletproof Minimal Version
+# VoidPunk Setup - Bulletproof Minimal Version
 # Purpose: Download repository and run installer (nothing else!)
 
 set -euo pipefail  # Exit on any error, undefined vars, or pipe failures
@@ -170,7 +170,7 @@ check_prerequisites() {
     # Test repository connectivity with HTTP request
     info_msg "Testing repository connectivity..."
     if ! curl -fsSL --connect-timeout 10 --max-time 30 --head "$REPO_URL" >/dev/null 2>&1; then
-        error_exit "Cannot connect to ArchRiot repository - check network connection"
+        error_exit "Cannot connect to VoidPunk repository - check network connection"
     fi
 
     success_msg "Prerequisites verified"
@@ -178,7 +178,7 @@ check_prerequisites() {
 
 # Download or update repository
 setup_repository() {
-    info_msg "Setting up ArchRiot repository..."
+    info_msg "Setting up VoidPunk repository..."
 
     if [[ -d "$INSTALL_DIR/.git" ]]; then
         info_msg "Updating existing installation..."
@@ -243,11 +243,19 @@ verify_installer() {
 # Main execution
 main() {
     echo -e "${BLUE}"
-    echo '▄  ▄▀█ █▀█ █▀▀ █ █ █▀█ █ █▀█ ▀█▀  ▄'
-    echo '▄  █▀█ █▀▄ █▄▄ █▀█ █▀▄ █ █▄█  █   ▄'
+echo "${NEON_PINK}"
+echo "____   ____    .__    ._____________              __    ";
+echo "\\   \\ /   /___ |__| __| _/\\______   \\__ __  ____ |  | __";
+echo " \\   Y   /  _ \\|  |/ __ |  |     ___/  |  \\/    \\|  |/ /";
+echo "  \\     (  <_> )  / /_/ |  |    |   |  |  /   |  \\    < ";
+echo "   \\___/ \\____/|__\\____ |  |____|   |____/|___|  /__|_ \\";
+echo "                       \\/                      \\/     \\/";
+echo "               ${NEON_CYAN}3000AC${NEON_PINK}"
+echo "${RESET}"
+
     echo -e "${NC}"
     echo
-    echo -e "${PURPLE}🎭 ArchRiot Setup${NC}"
+    echo -e "${PURPLE}🎭 VoidPunk Setup${NC}"
     echo -e "${PURPLE}=====================${NC}"
     echo
 
@@ -288,7 +296,7 @@ main() {
     verify_installer
 
     echo
-    info_msg "Starting ArchRiot installer..."
+    info_msg "Starting VoidPunk installer..."
     echo
 
     # Hand off to the real installer (pass through flags when supported; fallback safe)
@@ -309,5 +317,4 @@ main() {
     fi
 }
 
-# Run main function
 main "$@"
